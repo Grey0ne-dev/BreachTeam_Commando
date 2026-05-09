@@ -217,6 +217,19 @@ input_pipeline_test/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/input_pipeline_test.dir/build.make CMakeFiles/input_pipeline_test.dir/build
 .PHONY : input_pipeline_test/fast
 
+#=============================================================================
+# Target rules for targets named enet_transport_test
+
+# Build rule for target.
+enet_transport_test: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 enet_transport_test
+.PHONY : enet_transport_test
+
+# fast build rule for target.
+enet_transport_test/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/enet_transport_test.dir/build.make CMakeFiles/enet_transport_test.dir/build
+.PHONY : enet_transport_test/fast
+
 src/bootstrap_client.o: src/bootstrap_client.cpp.o
 .PHONY : src/bootstrap_client.o
 
@@ -481,6 +494,30 @@ tests/bootstrap_client_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/bootstrap_client_test.dir/build.make CMakeFiles/bootstrap_client_test.dir/tests/bootstrap_client_test.cpp.s
 .PHONY : tests/bootstrap_client_test.cpp.s
 
+tests/enet_transport_test.o: tests/enet_transport_test.cpp.o
+.PHONY : tests/enet_transport_test.o
+
+# target to build an object file
+tests/enet_transport_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/enet_transport_test.dir/build.make CMakeFiles/enet_transport_test.dir/tests/enet_transport_test.cpp.o
+.PHONY : tests/enet_transport_test.cpp.o
+
+tests/enet_transport_test.i: tests/enet_transport_test.cpp.i
+.PHONY : tests/enet_transport_test.i
+
+# target to preprocess a source file
+tests/enet_transport_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/enet_transport_test.dir/build.make CMakeFiles/enet_transport_test.dir/tests/enet_transport_test.cpp.i
+.PHONY : tests/enet_transport_test.cpp.i
+
+tests/enet_transport_test.s: tests/enet_transport_test.cpp.s
+.PHONY : tests/enet_transport_test.s
+
+# target to generate assembly for a file
+tests/enet_transport_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/enet_transport_test.dir/build.make CMakeFiles/enet_transport_test.dir/tests/enet_transport_test.cpp.s
+.PHONY : tests/enet_transport_test.cpp.s
+
 tests/host_candidates_test.o: tests/host_candidates_test.cpp.o
 .PHONY : tests/host_candidates_test.o
 
@@ -589,6 +626,7 @@ help:
 	@echo "... bootstrap_client_test"
 	@echo "... breach_team"
 	@echo "... breach_team_core"
+	@echo "... enet_transport_test"
 	@echo "... host_candidates_test"
 	@echo "... input_pipeline_test"
 	@echo "... migration_manager_test"
@@ -626,6 +664,9 @@ help:
 	@echo "... tests/bootstrap_client_test.o"
 	@echo "... tests/bootstrap_client_test.i"
 	@echo "... tests/bootstrap_client_test.s"
+	@echo "... tests/enet_transport_test.o"
+	@echo "... tests/enet_transport_test.i"
+	@echo "... tests/enet_transport_test.s"
 	@echo "... tests/host_candidates_test.o"
 	@echo "... tests/host_candidates_test.i"
 	@echo "... tests/host_candidates_test.s"

@@ -1,103 +1,13 @@
-# Breach Team P2P Clone (Linux-first)
-
-This repository contains the first milestone of a breach-team-inspired arena architecture:
-- deterministic simulation scaffold (fixed-point math + fixed timestep),
-- host migration candidate queue (`k = ceil(log2(n))`),
-- deterministic packet protocol for P2P control/data messages,
-- epoch-based host migration state manager,
-- ENet transport with optional real `libenet` host/peer channel integration (auto-enabled when installed),
-- bootstrap signaling client using JSON HTTP request/response (with legacy line-format fallback),
-- input-frame-to-tick deterministic pipeline with host-authoritative conflict resolution and same-peer latest-frame overwrite per tick,
-- Linux-native CMake build and Docker packaging.
-
-## Build locally (Linux)
-
-```bash
+BreachTeam: Commando"In the silence of the Void, the Corvette 'Acheron' stopped screaming. We were sent in to find out why. We found something that doesn't belong in this dimension."BreachTeam: Commando is a Linux-native, sci-fi "boomer shooter" and a technical homage to the DOOM engine. You play as a Commando dropped onto an abandoned space corvette that has become a breeding ground for a mysterious, reality-warping lifeform.Built with a deterministic simulation scaffold, this project ensures frame-perfect synchronization in peer-to-peer (P2P) environments through fixed-point math and a rigid input-to-tick pipeline.🌌 The Lore: The Acheron IncidentThe UEV Acheron was a research vessel specializing in "Deep Fold" propulsion. Three weeks ago, it reappeared in local orbit—dark, silent, and bleeding strange radiation.As a member of the BreachTeam, your mission is simple:Board the derelict vessel.Purge the "Phage"—a hive-mind organism that mimics biological structures.Survive the ship's shifting geometry.The Phage doesn't just kill; it overwrites reality. This is why our technology must be deterministic—if your simulation drifts, the Acheron consumes you.🛠 Technical Architecture (The Engine)The engine is built from the ground up to handle high-stakes P2P networking without the bloat of modern engines:Deterministic Core: Custom fixed-point math primitives and a fixed timestep ($60Hz$) to prevent simulation drift across architectures.P2P Networking:Host Migration: Automated candidate queueing ($k = \lceil \log_2(n) \rceil$) ensures the session continues even if the host disconnects.Input Pipeline: Input-frame-to-tick mapping with host-authoritative conflict resolution and latest-frame overwrite.Hybrid Rendering:CLI Raycaster: A first-person ASCII raycaster for the ultimate "hacker-commando" aesthetic.SDL2 Frontend: High-performance graphical output with DDA-based wall sampling.🏗 Build & Configuration1. RequirementsEnsure your Linux environment has the necessary headers for graphics and networking:Bashsudo apt update
+sudo apt install libsdl2-dev libsdl2-image-dev pkg-config libcurl4-openssl-dev
+2. CompilationThe build system uses CMake to auto-detect your local setup. If SDL2 is present, graphical mode is enabled automatically.Bash# Initialize build directory with Release optimizations
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
+
+# Build using all available CPU threads
+cmake --build build --parallel $(nproc)
+
+# Run the validation suite (Protocol, Migration, and Input tests)
 ctest --test-dir build --output-on-failure
-./build/breach_team
-```
-
-### Optional SDL2 renderer
-
-If `sdl2` is installed (`pkg-config --modversion sdl2`), CMake auto-enables SDL2 mode.
-
-Install graphics dependencies (Ubuntu/Debian):
-
-```bash
-sudo apt install libsdl2-dev libsdl2-image-dev pkg-config
-```
-
-Build and run with graphics:
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-./build/breach_team --sdl
-```
-
-Run SDL2 client:
-
-```bash
-./build/breach_team --sdl
-```
-
-SDL2 mode now shows the same startup menu:
-- `Solo Play`
-- `Host Game`
-- `Join Game`
-
-## Playable mode
-
-`./build/breach_team` now starts a terminal-playable first-person ASCII raycaster.
-
-Startup menu modes:
-- `Solo Play`
-- `Host Game` (starts local session with host label)
-- `Join Game` (starts local session with join label)
-
-Controls:
-- `W S`: move forward/backward
-- `A D`: rotate left/right
-- `Space`: shoot
-- `Q`: quit
-
-Legend:
-- 3D view uses distance-shaded wall glyphs and sprite enemies (`M`/`w`)
-- minimap matrix (top-left): `@` player, `e` enemies, `#` walls
-- weapon sprite is rendered at bottom-center with a center crosshair
-
-## Using textures (SDL2 path)
-
-Current SDL2 renderer uses flat colors. To use textures:
-1. Add a `assets/textures/` folder (e.g. `wall.png`, `floor.png`, `enemy.png`, `gun.png`).
-2. Install SDL image loader:
-   ```bash
-   sudo apt install libsdl2-image-dev
-   ```
-3. In CMake, link SDL2_image and define a compile flag for texture mode.
-4. In `src/sdl_game.cpp`, load textures once at startup (`IMG_Load` + `SDL_CreateTextureFromSurface`).
-5. Replace per-column flat wall draw with texture sampling using wall hit coordinate from DDA.
-6. Render enemy/gun as textured sprites instead of solid rectangles.
-
-## Build/run in Docker
-
-```bash
-docker build -f docker/Dockerfile -t breach-team:dev .
-docker run --rm breach-team:dev
-```
-
-## Current structure
-
-- `include/breach_team/core`: fixed-point and vector/matrix primitives
-- `include/breach_team/game`: deterministic game session API
-- `include/breach_team/net`: host-candidate queue API
-- `include/breach_team/net/protocol.hpp`: packet formats + binary serialization
-- `include/breach_team/net/migration_manager.hpp`: host migration state machine
-- `include/breach_team/net/transport.hpp`: transport abstraction
-- `include/breach_team/net/enet_transport.hpp`: ENet integration (real `libenet` path + deterministic fallback path)
-- `include/breach_team/net/bootstrap_client.hpp`: one-shot signaling contact API (JSON over HTTP)
-- `include/breach_team/net/input_pipeline.hpp`: input packet to deterministic tick mapping
-- `src`: core implementations and startup binary
-- `tests`: queue/protocol/migration/bootstrap/input/transport behavior tests
+🚀 Deployment & ExecutionLaunching the GameThe binary detects its environment. Launch it directly for the ASCII experience, or use the flag for graphics:Terminal Mode: ./build/breach_teamSDL2 Mode: ./build/breach_team --sdlMultiplayer RolesThe game uses a JSON-over-HTTP bootstrap signaling client to coordinate peers:Solo Play: Local arena mode for testing weapon feel and movement.Host Game: Sets your machine as the initial authority (Migration Candidate 0).Join Game: Handshakes with the signaling server to sync with an existing host.Docker (Headless/CI)To test the networking stack in a clean environment:Bashdocker build -f docker/Dockerfile -t breach-team:dev .
+docker run -it --rm breach-team:dev
+🎮 Controls & UIInputActionW / SMove Forward / BackwardA / DRotate Left / Right (Strafe in SDL2)SpaceDischarge Pulse WeaponQEmergency Evac (Quit)Legend:@: Commando Positione: Phage Entities#: Titanium Bulkheads (Walls)📂 Project Roadmap[x] Milestone 1: Deterministic fixed-point scaffold and P2P migration.[x] Milestone 2: Dual-renderer (ASCII/SDL2) and DDA raycasting logic.[ ] Milestone 3: Texture sampling for wall/sprite rendering (In Progress).[ ] Milestone 4: Complex AI "The Hivemind" implementation.Developed for Linux. No bloat. No mercy. NVIM BTW :)

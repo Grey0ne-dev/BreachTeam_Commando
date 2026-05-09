@@ -19,6 +19,13 @@ enum class PacketType : std::uint8_t {
     host_migration_ack = 5,
 };
 
+enum InputButtonBit : std::uint16_t {
+    BUTTON_MOVE_FORWARD = 1U << 0,
+    BUTTON_MOVE_BACKWARD = 1U << 1,
+    BUTTON_TURN_LEFT = 1U << 2,
+    BUTTON_TURN_RIGHT = 1U << 3,
+};
+
 struct HelloPacket {
     std::string peer_id;
     std::uint64_t session_nonce = 0;

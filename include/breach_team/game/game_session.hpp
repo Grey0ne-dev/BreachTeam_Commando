@@ -29,6 +29,7 @@ class GameSession {
 public:
     static constexpr std::chrono::milliseconds TICK_INTERVAL{16};
 
+    void simulate_tick(const FrameInput& input);
     void simulate_for(std::chrono::milliseconds elapsed, const FrameInput& input);
     std::uint64_t tick_count() const;
     const PlayerState& player() const;

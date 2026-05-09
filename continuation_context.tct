@@ -1,0 +1,67 @@
+PROJECT: Breach Team inspired P2P clone (Linux-first, Docker-packable)
+UPDATED_AT: 2026-05-04T14:53:46.031+04:00
+
+CURRENT_STATUS:
+- Milestone 1 complete: CMake scaffold, deterministic core primitives, host candidate queue, Docker flow.
+- Milestone 2 complete: deterministic packet protocol + host migration manager + tests + main wiring.
+- Milestone 3 complete and extended: ENet-ready transport scaffold, one-shot bootstrap client, input tick pipeline, and per-tick conflict resolution.
+- Playable mode upgraded to first-person terminal raycaster using fixed-point vectors and matrix rotation for movement/camera transforms.
+
+IMPLEMENTED_COMPONENTS:
+- Core math and deterministic stepping:
+  - include/breach_team/core/fixed.hpp
+  - include/breach_team/core/math.hpp
+  - include/breach_team/game/game_session.hpp
+  - src/game_session.cpp
+- Host selection / migration targets:
+  - include/breach_team/net/host_candidates.hpp
+  - src/host_candidates.cpp
+- Network protocol (binary packet format):
+  - include/breach_team/net/protocol.hpp
+  - src/protocol.cpp
+- Host migration state machine:
+  - include/breach_team/net/migration_manager.hpp
+  - src/migration_manager.cpp
+- Transport and bootstrap:
+  - include/breach_team/net/transport.hpp
+  - include/breach_team/net/enet_transport.hpp
+  - src/enet_transport.cpp
+  - include/breach_team/net/bootstrap_client.hpp
+  - src/bootstrap_client.cpp
+- Input pipeline:
+  - include/breach_team/net/input_pipeline.hpp
+  - src/input_pipeline.cpp
+  - rule: choose authoritative host input for same tick; otherwise lexical peer_id fallback
+- App/demo entry:
+  - src/main.cpp
+  - src/terminal_game.cpp
+- Build/tests/docs:
+  - CMakeLists.txt
+  - tests/host_candidates_test.cpp
+  - tests/protocol_test.cpp
+  - tests/migration_manager_test.cpp
+  - tests/bootstrap_client_test.cpp
+  - tests/input_pipeline_test.cpp
+  - README.md
+  - docker/Dockerfile
+
+LAST_KNOWN_OUTPUT:
+- Running ./build/breach_team prints (sample):
+  bootstrap_contacted=1 peers=1
+  outbound_queued=60
+  migration previous=peer-b next=peer-a epoch=8 tick=61
+  ticks=60 pos=(4.79919,0)
+  host-candidate=peer-b score=15.6068
+- CTest expected count: 5 tests.
+
+NEXT_WORK_ITEMS:
+1) Replace ENet transport scaffold internals with real ENet host/peer channels.
+2) Add real signaling service request/response implementation in BootstrapClient.
+3) Add conflict resolution for multiple input packets per tick (ordering/authority rules).
+
+RESUME_COMMANDS:
+cd /home/grey_0ne/Work/Projects/BreachTeam_Commando
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+./build/breach_team

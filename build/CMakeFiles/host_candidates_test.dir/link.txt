@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/host_candidates_test.dir/tests/host_candidates_test.cpp.o -o host_candidates_test  libbreach_team_core.a /usr/lib/x86_64-linux-gnu/libSDL2_image.so /usr/lib/x86_64-linux-gnu/libSDL2.so 

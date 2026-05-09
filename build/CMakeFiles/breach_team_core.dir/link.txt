@@ -1,0 +1,2 @@
+/usr/bin/ar qc libbreach_team_core.a CMakeFiles/breach_team_core.dir/src/game_session.cpp.o CMakeFiles/breach_team_core.dir/src/terminal_game.cpp.o CMakeFiles/breach_team_core.dir/src/host_candidates.cpp.o CMakeFiles/breach_team_core.dir/src/protocol.cpp.o CMakeFiles/breach_team_core.dir/src/migration_manager.cpp.o CMakeFiles/breach_team_core.dir/src/enet_transport.cpp.o CMakeFiles/breach_team_core.dir/src/bootstrap_client.cpp.o CMakeFiles/breach_team_core.dir/src/input_pipeline.cpp.o CMakeFiles/breach_team_core.dir/src/sdl_game.cpp.o
+/usr/bin/ranlib libbreach_team_core.a

@@ -1,0 +1,10 @@
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/breach_team_core.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/breach_team.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/host_candidates_test.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/protocol_test.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/migration_manager_test.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/bootstrap_client_test.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/input_pipeline_test.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/test.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/edit_cache.dir
+/home/grey_0ne/Work/Projects/BreachTeam_Commando/build/CMakeFiles/rebuild_cache.dir

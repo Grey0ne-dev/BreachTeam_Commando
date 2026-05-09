@@ -8,12 +8,32 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(breach_team_core
     src/game_session.cpp
+    src/terminal_game.cpp
     src/host_candidates.cpp
     src/protocol.cpp
     src/migration_manager.cpp
+    src/enet_transport.cpp
+    src/bootstrap_client.cpp
+    src/input_pipeline.cpp
 )
 
 target_include_directories(breach_team_core PUBLIC include)
+
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(SDL2 QUIET IMPORTED_TARGET sdl2)
+    pkg_check_modules(SDL2_IMAGE QUIET IMPORTED_TARGET SDL2_image)
+endif()
+
+if(SDL2_FOUND)
+    target_sources(breach_team_core PRIVATE src/sdl_game.cpp)
+    target_link_libraries(breach_team_core PRIVATE PkgConfig::SDL2)
+    if(SDL2_IMAGE_FOUND)
+        target_link_libraries(breach_team_core PRIVATE PkgConfig::SDL2_IMAGE)
+        target_compile_definitions(breach_team_core PUBLIC BREACH_TEAM_HAS_SDL2_IMAGE=1)
+    endif()
+    target_compile_definitions(breach_team_core PUBLIC BREACH_TEAM_HAS_SDL2=1)
+endif()
 
 add_executable(breach_team src/main.cpp)
 target_link_libraries(breach_team PRIVATE breach_team_core)
@@ -31,3 +51,11 @@ add_test(NAME protocol_test COMMAND protocol_test)
 add_executable(migration_manager_test tests/migration_manager_test.cpp)
 target_link_libraries(migration_manager_test PRIVATE breach_team_core)
 add_test(NAME migration_manager_test COMMAND migration_manager_test)
+
+add_executable(bootstrap_client_test tests/bootstrap_client_test.cpp)
+target_link_libraries(bootstrap_client_test PRIVATE breach_team_core)
+add_test(NAME bootstrap_client_test COMMAND bootstrap_client_test)
+
+add_executable(input_pipeline_test tests/input_pipeline_test.cpp)
+target_link_libraries(input_pipeline_test PRIVATE breach_team_core)
+add_test(NAME input_pipeline_test COMMAND input_pipeline_test)

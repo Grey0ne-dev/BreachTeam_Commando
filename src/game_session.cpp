@@ -18,10 +18,14 @@ core::Mat2Fixed rotation_matrix(bool left_turn) {
 
 }  // namespace
 
+void GameSession::simulate_tick(const FrameInput& input) {
+    step(input);
+}
+
 void GameSession::simulate_for(std::chrono::milliseconds elapsed, const FrameInput& input) {
     accumulator_ += elapsed;
     while (accumulator_ >= TICK_INTERVAL) {
-        step(input);
+        simulate_tick(input);
         accumulator_ -= TICK_INTERVAL;
     }
 }

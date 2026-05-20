@@ -1,7 +1,9 @@
 #include "breach_team/net/enet_transport.hpp"
 
+#include <array>
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -19,7 +21,11 @@ std::string endpoint_key_from_peer(const ENetPeer* peer) {
     if (peer == nullptr) {
         return {};
     }
-    return std::to_string(peer->address.host) + ":" + std::to_string(peer->address.port);
+    std::array<char, 64> host{};
+    if (enet_address_get_host_ip(&peer->address, host.data(), host.size()) != 0) {
+        return {};
+    }
+    return std::string(host.data()) + ":" + std::to_string(peer->address.port);
 }
 
 bool parse_peer_endpoint(std::string_view peer_id, std::string& host, std::uint16_t& port) {
@@ -58,19 +64,38 @@ bool EnetTransport::start(std::string self_peer_id) {
     }
 
     if (enet_initialize() != 0) {
+        std::cerr << "ENet init failed\n";
         started_ = false;
         return false;
     }
 
-    ENetHost* const host = enet_host_create(nullptr, 32, 2, 0, 0);
+    ENetAddress bind_address{};
+    ENetAddress* bind_ptr = nullptr;
+    std::string endpoint_host;
+    std::uint16_t endpoint_port = 0;
+    if (parse_peer_endpoint(self_peer_id_, endpoint_host, endpoint_port)) {
+        bind_address.host = ENET_HOST_ANY;
+        bind_address.port = endpoint_port;
+        bind_ptr = &bind_address;
+    }
+
+    ENetHost* const host = enet_host_create(bind_ptr, 32, 2, 0, 0);
     if (host == nullptr) {
+        std::cerr << "ENet host bind failed";
+        if (bind_ptr != nullptr) {
+            std::cerr << " on port " << bind_address.port;
+        }
+        std::cerr << "\n";
         enet_deinitialize();
         started_ = false;
         return false;
     }
     host_ = host;
-#endif
     return started_;
+#else
+    started_ = false;
+    return false;
+#endif
 }
 
 bool EnetTransport::send(std::string_view peer_id, std::span<const std::uint8_t> payload) {
@@ -102,11 +127,13 @@ bool EnetTransport::send(std::string_view peer_id, std::span<const std::uint8_t>
             if (enet_address_set_host(&address, endpoint_host.c_str()) == 0) {
                 peer = enet_host_connect(host, &address, 2, 0);
                 if (peer != nullptr) {
+                    peers_by_id_[std::string(peer_id)] = peer;
+                    ids_by_peer_[peer] = std::string(peer_id);
                     ENetEvent event{};
                     while (enet_host_service(host, &event, 10) > 0) {
                         if (event.type == ENET_EVENT_TYPE_CONNECT) {
-                            peers_by_id_.emplace(std::string(peer_id), event.peer);
-                            ids_by_peer_.emplace(event.peer, std::string(peer_id));
+                            peers_by_id_[std::string(peer_id)] = event.peer;
+                            ids_by_peer_[event.peer] = std::string(peer_id);
                             peer = event.peer;
                             break;
                         }
@@ -120,21 +147,20 @@ bool EnetTransport::send(std::string_view peer_id, std::span<const std::uint8_t>
         }
     }
 
-    if (peer != nullptr) {
-        ENetPacket* const enet_packet = enet_packet_create(
-            payload.empty() ? nullptr : payload.data(),
-            payload.size(),
-            ENET_PACKET_FLAG_RELIABLE
-        );
-        if (enet_packet == nullptr) {
-            return false;
-        }
-        if (enet_peer_send(peer, 0, enet_packet) != 0) {
-            enet_packet_destroy(enet_packet);
-            return false;
-        }
-        enet_host_flush(host);
+    if (peer == nullptr) {
+        return false;
     }
+
+    ENetPacket* const enet_packet =
+        enet_packet_create(payload.empty() ? nullptr : payload.data(), payload.size(), ENET_PACKET_FLAG_RELIABLE);
+    if (enet_packet == nullptr) {
+        return false;
+    }
+    if (enet_peer_send(peer, 0, enet_packet) != 0) {
+        enet_packet_destroy(enet_packet);
+        return false;
+    }
+    enet_host_flush(host);
 #endif
     return true;
 }
@@ -153,6 +179,15 @@ std::vector<TransportPacket> EnetTransport::poll() {
         ENetHost* const host = static_cast<ENetHost*>(host_);
         ENetEvent event{};
         while (enet_host_service(host, &event, 0) > 0) {
+            if (event.type == ENET_EVENT_TYPE_CONNECT) {
+                const std::string id = endpoint_key_from_peer(event.peer);
+                if (!id.empty()) {
+                    peers_by_id_[id] = event.peer;
+                    ids_by_peer_[event.peer] = id;
+                }
+                continue;
+            }
+
             if (event.type == ENET_EVENT_TYPE_RECEIVE) {
                 TransportPacket packet{};
                 const auto id_it = ids_by_peer_.find(event.peer);

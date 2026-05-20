@@ -2,11 +2,15 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <cmath>
 #include <iostream>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <sys/select.h>
@@ -15,6 +19,8 @@
 #include <unistd.h>
 
 #include "breach_team/core/math.hpp"
+#include "breach_team/net/enet_transport.hpp"
+#include "breach_team/net/protocol.hpp"
 
 namespace breach_team::game {
 
@@ -74,6 +80,18 @@ struct Enemy {
     Vec2Fixed pos;
     int hp = 2;
     int attack_cooldown = 0;
+};
+
+struct RemotePlayer {
+    Vec2Fixed pos;
+    Vec2Fixed dir;
+    std::uint64_t last_tick = 0;
+};
+
+enum class SessionMode {
+    solo,
+    host,
+    join,
 };
 
 struct Viewport {
@@ -174,6 +192,64 @@ void rotate_player(Vec2Fixed& dir, Vec2Fixed& plane, bool left) {
     plane = rot * plane;
 }
 
+void rotate_direction(Vec2Fixed& dir, bool left) {
+    dir = rotation_matrix(left) * dir;
+}
+
+void apply_buttons(
+    const std::vector<std::string>& map,
+    std::uint16_t buttons,
+    const std::vector<Enemy>& enemies,
+    Vec2Fixed& pos,
+    Vec2Fixed& dir,
+    Vec2Fixed* camera_plane
+) {
+    if ((buttons & net::BUTTON_TURN_LEFT) != 0) {
+        if (camera_plane != nullptr) {
+            rotate_player(dir, *camera_plane, true);
+        } else {
+            rotate_direction(dir, true);
+        }
+    }
+    if ((buttons & net::BUTTON_TURN_RIGHT) != 0) {
+        if (camera_plane != nullptr) {
+            rotate_player(dir, *camera_plane, false);
+        } else {
+            rotate_direction(dir, false);
+        }
+    }
+
+    if ((buttons & net::BUTTON_MOVE_FORWARD) != 0) {
+        const Vec2Fixed forward = dir * MOVE_SPEED;
+        const auto nx = pos.x + forward.x;
+        const auto ny = pos.y + forward.y;
+        if (can_walk(map, nx, pos.y, enemies)) {
+            pos.x = nx;
+        }
+        if (can_walk(map, pos.x, ny, enemies)) {
+            pos.y = ny;
+        }
+    }
+    if ((buttons & net::BUTTON_MOVE_BACKWARD) != 0) {
+        const Vec2Fixed backward = dir * MOVE_SPEED;
+        const auto nx = pos.x - backward.x;
+        const auto ny = pos.y - backward.y;
+        if (can_walk(map, nx, pos.y, enemies)) {
+            pos.x = nx;
+        }
+        if (can_walk(map, pos.x, ny, enemies)) {
+            pos.y = ny;
+        }
+    }
+}
+
+Vec2Fixed spawn_for_peer(std::string_view peer_id) {
+    const std::size_t h = std::hash<std::string_view>{}(peer_id);
+    const int sx = 3 + static_cast<int>(h % 20U);
+    const int sy = 3 + static_cast<int>((h / 23U) % 14U);
+    return {Fixed16::from_int(sx), Fixed16::from_int(sy)};
+}
+
 char wall_shade(double distance, bool side_hit) {
     if (distance < 1.2) {
         return side_hit ? '@' : '#';
@@ -194,7 +270,8 @@ void draw_minimap(
     std::vector<std::string>& frame,
     const std::vector<std::string>& map,
     const Vec2Fixed& player,
-    const std::vector<Enemy>& enemies
+    const std::vector<Enemy>& enemies,
+    const std::vector<Vec2Fixed>& remote_players
 ) {
     const int origin_x = 0;
     const int origin_y = 0;
@@ -224,6 +301,14 @@ void draw_minimap(
         const int ey = static_cast<int>(enemy.pos.y.to_double());
         if (in_bounds(ex, ey)) {
             frame[origin_y + ey][origin_x + ex] = 'e';
+        }
+    }
+
+    for (const auto& remote : remote_players) {
+        const int rx = static_cast<int>(remote.x.to_double());
+        const int ry = static_cast<int>(remote.y.to_double());
+        if (in_bounds(rx, ry)) {
+            frame[origin_y + ry][origin_x + rx] = 'p';
         }
     }
 }
@@ -315,6 +400,7 @@ void render_frame(
     const Vec2Fixed& player_dir,
     const Vec2Fixed& camera_plane,
     const std::vector<Enemy>& enemies,
+    const std::vector<Vec2Fixed>& remote_players,
     const std::string& mode_label,
     Viewport viewport,
     int hp,
@@ -447,6 +533,32 @@ void render_frame(
         sprites.push_back(render);
     }
 
+    for (const auto& remote : remote_players) {
+        const double sx = remote.x.to_double() - pos_x;
+        const double sy = remote.y.to_double() - pos_y;
+
+        const double inv_det = 1.0 / (plane_x * dir_y - dir_x * plane_y);
+        const double transform_x = inv_det * (dir_y * sx - dir_x * sy);
+        const double transform_y = inv_det * (-plane_y * sx + plane_x * sy);
+        if (transform_y <= 0.1) {
+            continue;
+        }
+
+        const int sprite_screen_x = static_cast<int>((screen_w / 2.0) * (1.0 + transform_x / transform_y));
+        const int sprite_height = std::abs(static_cast<int>(screen_h / transform_y));
+        const int sprite_width = std::abs(static_cast<int>(screen_h / transform_y));
+
+        SpriteRender render{};
+        render.depth = transform_y;
+        render.screen_x = sprite_screen_x;
+        render.draw_start_y = std::max(-sprite_height / 2 + screen_h / 2, 0);
+        render.draw_end_y = std::min(sprite_height / 2 + screen_h / 2, screen_h - 1);
+        render.draw_start_x = std::max(-sprite_width / 2 + sprite_screen_x, 0);
+        render.draw_end_x = std::min(sprite_width / 2 + sprite_screen_x, screen_w - 1);
+        render.shade = 'P';
+        sprites.push_back(render);
+    }
+
     std::sort(sprites.begin(), sprites.end(), [](const SpriteRender& lhs, const SpriteRender& rhs) {
         return lhs.depth > rhs.depth;
     });
@@ -462,7 +574,7 @@ void render_frame(
         }
     }
 
-    draw_minimap(frame, map, player_pos, enemies);
+    draw_minimap(frame, map, player_pos, enemies, remote_players);
     draw_weapon_overlay(frame);
 
     std::cout << "\x1b[H";
@@ -480,6 +592,9 @@ void render_frame(
 
 int run_terminal_game() {
     std::string mode_label = "SOLO PLAY";
+    SessionMode session_mode = SessionMode::solo;
+    std::string self_endpoint = "127.0.0.1:30000";
+    std::string remote_endpoint;
     while (true) {
         std::cout << "\n=== BREACH TEAM ===\n";
         std::cout << "1) Solo Play\n";
@@ -499,20 +614,32 @@ int run_terminal_game() {
         const char selected = choice[0];
         if (selected == '1') {
             mode_label = "SOLO PLAY";
+            session_mode = SessionMode::solo;
             break;
         }
         if (selected == '2') {
-            std::cout << "Host name (optional): ";
-            std::string host_name;
-            std::getline(std::cin, host_name);
-            mode_label = host_name.empty() ? "HOST MODE" : ("HOST MODE [" + host_name + "]");
+            std::cout << "Host listen endpoint [127.0.0.1:30000]: ";
+            std::string endpoint;
+            std::getline(std::cin, endpoint);
+            if (!endpoint.empty()) {
+                self_endpoint = endpoint;
+            }
+            mode_label = "HOST MODE [" + self_endpoint + "]";
+            session_mode = SessionMode::host;
             break;
         }
         if (selected == '3') {
-            std::cout << "Join code (optional): ";
-            std::string join_code;
-            std::getline(std::cin, join_code);
-            mode_label = join_code.empty() ? "JOIN MODE" : ("JOIN MODE [" + join_code + "]");
+            std::cout << "Host endpoint (ip:port): ";
+            std::getline(std::cin, remote_endpoint);
+            if (remote_endpoint.empty()) {
+                continue;
+            }
+            std::cout << "Local listen endpoint [127.0.0.1:30001]: ";
+            std::string local_endpoint;
+            std::getline(std::cin, local_endpoint);
+            self_endpoint = local_endpoint.empty() ? "127.0.0.1:30001" : local_endpoint;
+            mode_label = "JOIN MODE [" + remote_endpoint + "]";
+            session_mode = SessionMode::join;
             break;
         }
         if (selected == 'q' || selected == 'Q') {
@@ -571,9 +698,26 @@ int run_terminal_game() {
     int wave = 1;
     int tick = 0;
     bool running = true;
+    const bool multiplayer = session_mode != SessionMode::solo;
+    const std::string self_peer_id =
+        multiplayer ? ("peer-" + std::to_string(static_cast<unsigned long long>(std::hash<std::string>{}(self_endpoint))) +
+                       "@" + self_endpoint)
+                    : std::string{};
+    net::EnetTransport transport;
+    std::unordered_set<std::string> peer_routes;
+    std::unordered_map<std::string, RemotePlayer> remote_players;
+    if (multiplayer && !transport.start(self_peer_id)) {
+        mode_label += " [NET-OFFLINE]";
+    } else if (multiplayer) {
+        if (!remote_endpoint.empty()) {
+            peer_routes.insert(remote_endpoint);
+        }
+        mode_label += " [P2P]";
+    }
 
     while (running && hp > 0) {
         bool shoot = false;
+        std::uint16_t local_buttons = 0;
         while (can_read_input()) {
             char key = 0;
             if (read(STDIN_FILENO, &key, 1) <= 0) {
@@ -583,31 +727,77 @@ int run_terminal_game() {
             if (key == 'q' || key == 'Q') {
                 running = false;
             } else if (key == 'a' || key == 'A') {
-                rotate_player(player_dir, camera_plane, true);
+                local_buttons = static_cast<std::uint16_t>(local_buttons | net::BUTTON_TURN_LEFT);
             } else if (key == 'd' || key == 'D') {
-                rotate_player(player_dir, camera_plane, false);
+                local_buttons = static_cast<std::uint16_t>(local_buttons | net::BUTTON_TURN_RIGHT);
             } else if (key == 'w' || key == 'W') {
-                const Vec2Fixed forward = player_dir * MOVE_SPEED;
-                const auto nx = player_pos.x + forward.x;
-                const auto ny = player_pos.y + forward.y;
-                if (can_walk(map, nx, player_pos.y, enemies)) {
-                    player_pos.x = nx;
-                }
-                if (can_walk(map, player_pos.x, ny, enemies)) {
-                    player_pos.y = ny;
-                }
+                local_buttons = static_cast<std::uint16_t>(local_buttons | net::BUTTON_MOVE_FORWARD);
             } else if (key == 's' || key == 'S') {
-                const Vec2Fixed backward = player_dir * MOVE_SPEED;
-                const auto nx = player_pos.x - backward.x;
-                const auto ny = player_pos.y - backward.y;
-                if (can_walk(map, nx, player_pos.y, enemies)) {
-                    player_pos.x = nx;
-                }
-                if (can_walk(map, player_pos.x, ny, enemies)) {
-                    player_pos.y = ny;
-                }
+                local_buttons = static_cast<std::uint16_t>(local_buttons | net::BUTTON_MOVE_BACKWARD);
             } else if (key == ' ') {
                 shoot = true;
+            }
+        }
+
+        apply_buttons(map, local_buttons, enemies, player_pos, player_dir, &camera_plane);
+
+        if (multiplayer) {
+            if ((tick % 45) == 0) {
+                const auto hello_payload = net::serialize_packet(net::Packet{net::HelloPacket{
+                    .peer_id = self_peer_id,
+                    .session_nonce = 1,
+                    .protocol_version = net::PROTOCOL_VERSION,
+                }});
+                for (const auto& route : peer_routes) {
+                    transport.send(route, hello_payload);
+                }
+            }
+
+            const auto input_payload = net::serialize_packet(net::Packet{net::InputFramePacket{
+                .peer_id = self_peer_id,
+                .tick = static_cast<std::uint64_t>(tick),
+                .buttons = local_buttons,
+                .look_delta = 0,
+            }});
+            for (const auto& route : peer_routes) {
+                transport.send(route, input_payload);
+            }
+
+            for (const auto& raw_packet : transport.poll()) {
+                if (raw_packet.peer_id == self_peer_id) {
+                    continue;
+                }
+                peer_routes.insert(raw_packet.peer_id);
+                const auto decoded = net::deserialize_packet(raw_packet.payload);
+                if (!decoded.has_value()) {
+                    continue;
+                }
+
+                if (std::holds_alternative<net::HelloPacket>(*decoded)) {
+                    continue;
+                }
+                if (!std::holds_alternative<net::InputFramePacket>(*decoded)) {
+                    continue;
+                }
+
+                auto& remote = remote_players[raw_packet.peer_id];
+                if (remote.last_tick == 0) {
+                    remote.pos = spawn_for_peer(raw_packet.peer_id);
+                    remote.dir = {Fixed16::from_double(1.0), Fixed16::from_double(0.0)};
+                }
+
+                const auto& input = std::get<net::InputFramePacket>(*decoded);
+        apply_buttons(map, input.buttons, enemies, remote.pos, remote.dir, nullptr);
+                remote.last_tick = static_cast<std::uint64_t>(tick);
+            }
+
+            for (auto it = remote_players.begin(); it != remote_players.end();) {
+                if ((static_cast<std::uint64_t>(tick) - it->second.last_tick) > 300U) {
+                    peer_routes.erase(it->first);
+                    it = remote_players.erase(it);
+                } else {
+                    ++it;
+                }
             }
         }
 
@@ -674,8 +864,27 @@ int run_terminal_game() {
             running = false;
         }
 
+        std::vector<Vec2Fixed> remote_positions;
+        remote_positions.reserve(remote_players.size());
+        for (const auto& [_, remote] : remote_players) {
+            remote_positions.push_back(remote.pos);
+        }
+
         const Viewport viewport = query_viewport();
-        render_frame(map, player_pos, player_dir, camera_plane, enemies, mode_label, viewport, hp, ammo, score, wave);
+        render_frame(
+            map,
+            player_pos,
+            player_dir,
+            camera_plane,
+            enemies,
+            remote_positions,
+            mode_label,
+            viewport,
+            hp,
+            ammo,
+            score,
+            wave
+        );
         std::this_thread::sleep_for(std::chrono::milliseconds(33));
         ++tick;
     }

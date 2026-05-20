@@ -49,8 +49,7 @@ Ensure your Linux environment has the necessary headers for graphics and network
 
 ```bash
 sudo apt update
-sudo apt install libsdl2-dev libsdl2-image-dev pkg-config libcurl4-openssl-dev
-
+sudo apt install -y build-essential cmake pkg-config libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libcurl4-openssl-dev
 ```
 
 #### 2. Compilation
@@ -58,13 +57,16 @@ sudo apt install libsdl2-dev libsdl2-image-dev pkg-config libcurl4-openssl-dev
 The build system uses **CMake** to auto-detect your local setup. If SDL2 is present, graphical mode is enabled automatically. ⚙️
 
 ```bash
-# Initialize build directory with Release optimizations
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+# If project path changed, clear stale CMake cache once
+rm -rf build
 
-# Build using all available CPU threads
-cmake --build build --parallel $(nproc)
+# Configure (out-of-source)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-# Run the validation suite (Protocol, Migration, and Input tests)
+# Build
+cmake --build build --parallel
+
+# Run tests
 ctest --test-dir build --output-on-failure
 
 ```
